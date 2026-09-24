@@ -1,25 +1,26 @@
-<<<<<<< HEAD
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 🐍 Snake Rush
 
-# Run and deploy your AI Studio app
+Snake Rush is a fast-paced mobile snake game with challenging levels, multiple snake skins, rewards and leaderboard.
 
-This contains everything you need to run your app locally.
+## 🎮 Game
 
-View your app in AI Studio: https://ai.studio/apps/94423ff2-2f06-4ffc-b994-c5b059be0b66
+Snake Rush is designed for Android devices with smooth touch controls and exciting gameplay.
 
-## Run Locally
+## ✨ Features
 
-**Prerequisites:**  Node.js
+- 🐍 Multiple Snake Skins
+- 🎯 Challenging Levels
+- 🏆 Leaderboard
+- ⭐ Rewards
+- 📱 Mobile Gameplay
+- 🎮 Touch Controls
 
+## 📱 Platform
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
-=======
-# SnakeRush
-Snake Rush – A fast-paced mobile snake game with challenging levels, multiple snake skins, rewards, and leaderboard.
->>>>>>> 32eefa88f694143f32d92bef18b42d83d70a2e10
+Android
+
+## 🔗 Play Store
+
+Coming Soon
+
+Made with ❤️ by Harsh Gupta
