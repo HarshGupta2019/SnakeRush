@@ -1,0 +1,6 @@
+{
+  "name": "ARROW RUSH: Escape & Shape",
+  "description": "An original arrow-removal mobile puzzle game with Emergency Mode escape countdowns, Shape Mode silhouette puzzles, customizable cosmetics, and 1000+ solvable levels.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

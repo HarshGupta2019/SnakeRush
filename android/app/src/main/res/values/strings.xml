@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SnakeRush</string>
+    <string name="title_activity_main">SnakeRush</string>
+    <string name="package_name">com.harsh.SnakeRush</string>
+    <string name="custom_url_scheme">com.harsh.SnakeRush</string>
+</resources>
