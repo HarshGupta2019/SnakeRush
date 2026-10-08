@@ -6,6 +6,7 @@ import { BOARD_THEMES, ARROW_SKINS } from '../utils/themes';
 import { auth, db } from '../firebase';
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { getDateKey } from '../utils/dailyChallenge';
 
 const STORAGE_KEY = 'arrow_rush_v1_save';
 const SNAKE_ADS_REQUIRED = 10;
@@ -47,7 +48,7 @@ const DEFAULT_PROGRESS: UserProgress = {
   soundEnabled: true,
   musicEnabled: true,
   hapticsEnabled: true,
-  dailyStreak: 1,
+  dailyStreak: 0,
   lastDailyDate: '',
   dailyCompletedToday: false,
   hintsCount: 3,
@@ -88,7 +89,6 @@ interface GameContextType {
   toggleSoundSetting: () => void;
   toggleMusicSetting: () => void;
   toggleHapticsSetting: () => void;
-  claimDailyStreakBonus: () => void;
   addCoinsDirect: (amount: number) => void;
   updateProfile: (name: string, avatar: string) => void;
   removeAdsAction: () => void;
@@ -108,6 +108,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           ...DEFAULT_PROGRESS,
           ...parsed,
+          dailyStreak: parsed.lastDailyDate ? parsed.dailyStreak : 0,
           snakeAdProgress: parsed.snakeAdProgress || {},
           stats: { ...DEFAULT_STATS, ...(parsed.stats || {}) },
         };
@@ -150,18 +151,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check daily streak reset
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getDateKey();
     if (progress.lastDailyDate && progress.lastDailyDate !== today) {
-      const last = new Date(progress.lastDailyDate);
-      const now = new Date(today);
-      const diffDays = Math.round((now.getTime() - last.getTime()) / (1000 * 3600 * 24));
+      const diffDays = Math.round(
+        (Date.parse(`${today}T00:00:00`) - Date.parse(`${progress.lastDailyDate}T00:00:00`)) /
+          (1000 * 60 * 60 * 24),
+      );
 
       if (diffDays === 1) {
-        // Consecutive day
         setProgress(prev => ({ ...prev, dailyCompletedToday: false }));
       } else if (diffDays > 1) {
-        // Streak broken
-        setProgress(prev => ({ ...prev, dailyStreak: 1, dailyCompletedToday: false }));
+        setProgress(prev => ({ ...prev, dailyStreak: 0, dailyCompletedToday: false }));
       }
     }
   }, [progress.lastDailyDate]);
@@ -231,8 +231,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : prev.stats.fastestEmergencyEscape,
       };
 
+      const today = getDateKey();
+      const alreadyCompletedToday =
+        isDailyChallenge && prev.dailyCompletedToday && prev.lastDailyDate === today;
       const updatedDaily = isDailyChallenge ? true : prev.dailyCompletedToday;
-      const completedDate = isDailyChallenge ? new Date().toISOString().slice(0, 10) : prev.lastDailyDate;
+      const completedDate = isDailyChallenge ? today : prev.lastDailyDate;
+      let dailyStreak = prev.dailyStreak;
+
+      if (isDailyChallenge && !alreadyCompletedToday) {
+        const daysSinceLastCompletion = prev.lastDailyDate
+          ? Math.round(
+              (Date.parse(`${today}T00:00:00`) -
+                Date.parse(`${prev.lastDailyDate}T00:00:00`)) /
+                (1000 * 60 * 60 * 24),
+            )
+          : 0;
+        dailyStreak = daysSinceLastCompletion === 1 ? prev.dailyStreak + 1 : 1;
+      }
 
       return {
         ...prev,
@@ -242,6 +257,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stars: { ...prev.stars, [levelKey]: newStars },
         dailyCompletedToday: updatedDaily,
         lastDailyDate: completedDate,
+        dailyStreak,
         stats: newStats,
       };
     });
@@ -444,39 +460,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  const claimDailyStreakBonus = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const hasAlreadyCompletedToday = progress.dailyCompletedToday && progress.lastDailyDate === today;
-    
-    if (!hasAlreadyCompletedToday) {
-      soundManager.playVictoryFanfare();
-      
-      // Calculate diff to see if streak was broken before claiming
-      let newStreak = progress.dailyStreak;
-      if (progress.lastDailyDate) {
-        const last = new Date(progress.lastDailyDate);
-        const now = new Date(today);
-        const diffDays = Math.round((now.getTime() - last.getTime()) / (1000 * 3600 * 24));
-        if (diffDays > 1) {
-          newStreak = 1; // Streak broken
-        } else if (diffDays === 1) {
-          newStreak += 1; // Streak continues
-        }
-      } else {
-        newStreak = 1; // First time
-      }
-
-      const bonus = 50 * Math.min(7, newStreak);
-      setProgress(prev => ({
-        ...prev,
-        coins: prev.coins + bonus,
-        dailyStreak: newStreak,
-        lastDailyDate: today,
-        dailyCompletedToday: true,
-      }));
-    }
-  }, [progress.dailyCompletedToday, progress.dailyStreak]);
-
   const addCoinsDirect = useCallback((amount: number) => {
     soundManager.playCoinEarn();
     setProgress(prev => ({ ...prev, coins: prev.coins + amount }));
@@ -543,7 +526,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleSoundSetting,
         toggleMusicSetting,
         toggleHapticsSetting,
-        claimDailyStreakBonus,
         addCoinsDirect,
         updateProfile,
         removeAdsAction,
@@ -574,7 +556,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toggleSoundSetting,
     toggleMusicSetting,
     toggleHapticsSetting,
-    claimDailyStreakBonus,
     addCoinsDirect,
     updateProfile,
     removeAdsAction,

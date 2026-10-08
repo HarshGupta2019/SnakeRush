@@ -49,6 +49,13 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { SplashScreen } from './components/common/SplashScreen';
 import { BOARD_THEMES } from './utils/themes';
 import { initializeAdMob } from './utils/admob';
+import { Capacitor } from '@capacitor/core';
+import {
+  cancelInactivityReminders,
+  enableInactivityReminders,
+  initializeInactivityReminders,
+  scheduleInactivityReminders,
+} from './utils/inactivityReminders';
 
 
 export const saveScore = async (stars: number, playerName: string, avatar: string, dailyStreak: number, lastDailyDate: string) => {
@@ -132,6 +139,99 @@ const MainAppContent: React.FC = () => {
       // Silently ignore — AdMob failure must never crash the game
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let permissionReady = false;
+    let reminderSequence: Promise<void> = Promise.resolve();
+    let permissionRequestPending = false;
+    let permissionRequestAttempted = false;
+
+    if (document.visibilityState !== 'hidden') {
+      localStorage.setItem('snake_rush_last_activity', String(Date.now()));
+      reminderSequence = reminderSequence
+        .then(cancelInactivityReminders)
+        .catch(error => console.error('Inactivity reminders could not be cancelled:', error));
+    }
+
+    void initializeInactivityReminders()
+      .then(granted => {
+        permissionReady = granted;
+        if (granted && document.visibilityState === 'hidden') {
+          reminderSequence = reminderSequence
+            .then(scheduleInactivityReminders)
+            .catch(error => console.error('Inactivity reminders could not be scheduled:', error));
+        }
+      })
+      .catch(error => console.error('Notification permission check failed:', error));
+
+    const recordActivity = () => {
+      localStorage.setItem('snake_rush_last_activity', String(Date.now()));
+
+      if (!permissionReady && !permissionRequestPending && !permissionRequestAttempted) {
+        permissionRequestPending = true;
+        permissionRequestAttempted = true;
+        void enableInactivityReminders()
+          .then(granted => {
+            permissionReady = granted;
+            if (granted && document.visibilityState === 'hidden') {
+              reminderSequence = reminderSequence
+                .then(scheduleInactivityReminders)
+                .catch(error => console.error('Inactivity reminders could not be scheduled:', error));
+            }
+          })
+          .catch(error => {
+            permissionRequestAttempted = false;
+            console.error('Notification permission request failed:', error);
+          })
+          .finally(() => {
+            permissionRequestPending = false;
+          });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (permissionReady) {
+          reminderSequence = reminderSequence
+            .then(scheduleInactivityReminders)
+            .catch(error => console.error('Inactivity reminders could not be scheduled:', error));
+        }
+        return;
+      }
+
+      localStorage.setItem('snake_rush_last_activity', String(Date.now()));
+      reminderSequence = reminderSequence
+        .then(cancelInactivityReminders)
+        .catch(error => console.error('Inactivity reminders could not be cancelled:', error));
+      void initializeInactivityReminders()
+        .then(granted => {
+          permissionReady = granted;
+          permissionRequestAttempted = false;
+        })
+        .catch(error => console.error('Notification permission check failed:', error));
+    };
+
+    const handlePageHide = () => {
+      if (permissionReady) {
+        reminderSequence = reminderSequence
+          .then(scheduleInactivityReminders)
+          .catch(error => console.error('Inactivity reminders could not be scheduled:', error));
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart'];
+    activityEvents.forEach(eventName => window.addEventListener(eventName, recordActivity, { passive: true }));
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      activityEvents.forEach(eventName => window.removeEventListener(eventName, recordActivity));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
   }, []);
 
   useEffect(() => {

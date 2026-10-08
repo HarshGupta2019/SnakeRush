@@ -2,18 +2,26 @@ import React from 'react';
 import { useGame } from '../../context/GameContext';
 import { ArrowLeft, Flame, Calendar, Play, CheckCircle2, Coins, Sparkles, Trophy } from 'lucide-react';
 import { soundManager } from '../../utils/audio';
+import { getDateKey, getDailyPuzzleLevelId } from '../../utils/dailyChallenge';
 
 export const DailyChallengeModal: React.FC = () => {
-  const { progress, setScreen, startLevel, claimDailyStreakBonus, isLight } = useGame();
+  const { progress, setScreen, startLevel, isLight } = useGame();
 
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const currentStreakDay = ((progress.dailyStreak - 1) % 7) + 1;
-  const today = new Date().toISOString().slice(0, 10);
+  const currentStreakDay = ((Math.max(1, progress.dailyStreak) - 1) % 7) + 1;
+  const today = getDateKey();
   const hasCompletedDaily = progress.dailyCompletedToday && progress.lastDailyDate === today;
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const rewardStreak = hasCompletedDaily
+    ? progress.dailyStreak
+    : progress.lastDailyDate === getDateKey(yesterday)
+    ? progress.dailyStreak + 1
+    : 1;
 
   const handleStartDaily = () => {
     soundManager.playTap();
-    const dailyLevelId = 1 + (Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % 35);
+    const dailyLevelId = getDailyPuzzleLevelId(today);
     startLevel('emergency', dailyLevelId, true);
   };
 
@@ -78,7 +86,7 @@ export const DailyChallengeModal: React.FC = () => {
         <div className="text-right">
           <span className={`text-[10px] font-medium ${isLight ? 'text-stone-600' : 'text-slate-400'}`}>Daily Reward</span>
           <div className={`text-sm font-mono font-bold ${isLight ? 'text-amber-900' : 'text-amber-300'}`}>
-            +{50 * Math.min(7, progress.dailyStreak)} Coins
+            +{50 * Math.min(7, rewardStreak)} Coins
           </div>
         </div>
       </div>
@@ -176,7 +184,7 @@ export const DailyChallengeModal: React.FC = () => {
       </div>
 
       <div className={`text-center text-xs font-medium my-2 ${isLight ? 'text-stone-500' : 'text-slate-500'}`}>
-        New challenge resets every 24 hours
+        A new random puzzle is available every day
       </div>
     </div>
   );

@@ -232,6 +232,19 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
   const { progress, isLight } = useGame();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [boardView, setBoardView] = useState({ scale: 1, x: 0, y: 0 });
+  const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const panStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const pinchStartRef = useRef<{
+    distance: number;
+    centerX: number;
+    centerY: number;
+    scale: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+  const draggedRef = useRef(false);
+  const suppressClickRef = useRef(false);
 
   // --- PERFORMANCE FIX: forceUpdate counter replaces per-frame setState ---
   // Animations update refs directly; this counter is bumped only at animation
@@ -291,6 +304,7 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
     setEscapingArrowId(null);
     setActiveEscapingAnimal(null);
     setAnimalEscapeCoord(null);
+    setBoardView({ scale: 1, x: 0, y: 0 });
     forceUpdate();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [levelId, boardSession]); // ← boardSession added: restart/next-level resets without unmount
@@ -332,6 +346,102 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
   const PADDING = 34;
   const viewBoxWidth = PADDING * 2 + gridWidth * CELL_SIZE;
   const viewBoxHeight = PADDING * 2 + gridHeight * CELL_SIZE;
+
+  const handleBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (activePointersRef.current.size === 1) {
+      panStartRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        offsetX: boardView.x,
+        offsetY: boardView.y,
+      };
+      pinchStartRef.current = null;
+      draggedRef.current = false;
+    } else if (activePointersRef.current.size === 2) {
+      const [first, second] = Array.from(activePointersRef.current.values());
+      const centerX = (first.x + second.x) / 2;
+      const centerY = (first.y + second.y) / 2;
+      pinchStartRef.current = {
+        distance: Math.hypot(second.x - first.x, second.y - first.y),
+        centerX,
+        centerY,
+        scale: boardView.scale,
+        offsetX: boardView.x,
+        offsetY: boardView.y,
+      };
+      panStartRef.current = null;
+      draggedRef.current = true;
+    }
+  };
+
+  const handleBoardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!activePointersRef.current.has(event.pointerId)) return;
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointersRef.current.size >= 2 && pinchStartRef.current) {
+      const [first, second] = Array.from(activePointersRef.current.values());
+      const centerX = (first.x + second.x) / 2;
+      const centerY = (first.y + second.y) / 2;
+      const start = pinchStartRef.current;
+      const scale = Math.min(3.5, Math.max(0.65, start.scale *
+        (Math.hypot(second.x - first.x, second.y - first.y) / Math.max(1, start.distance))));
+      setBoardView({
+        scale,
+        x: start.offsetX + centerX - start.centerX,
+        y: start.offsetY + centerY - start.centerY,
+      });
+      draggedRef.current = true;
+      return;
+    }
+
+    const start = panStartRef.current;
+    if (!start) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.hypot(deltaX, deltaY) > 5) {
+      draggedRef.current = true;
+      setBoardView(view => ({ ...view, x: start.offsetX + deltaX, y: start.offsetY + deltaY }));
+    }
+  };
+
+  const handleBoardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.delete(event.pointerId);
+    if (draggedRef.current) {
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 250);
+    }
+    if (activePointersRef.current.size < 2) pinchStartRef.current = null;
+    if (activePointersRef.current.size === 0) panStartRef.current = null;
+  };
+
+  const handleBoardWheel = useCallback((event: WheelEvent) => {
+    event.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const bounds = container.getBoundingClientRect();
+    const zoomFactor = Math.exp(-event.deltaY * 0.001);
+    setBoardView(view => {
+      const scale = Math.min(3.5, Math.max(0.65, view.scale * zoomFactor));
+      const ratio = scale / view.scale;
+      const cursorX = event.clientX - bounds.left - bounds.width / 2;
+      const cursorY = event.clientY - bounds.top - bounds.height / 2;
+      return {
+        scale,
+        x: cursorX - (cursorX - view.x) * ratio,
+        y: cursorY - (cursorY - view.y) * ratio,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener('wheel', handleBoardWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleBoardWheel);
+  }, [handleBoardWheel]);
 
   // Converts integer grid coords (gx, gy) to SVG coordinates
   const toSvgCoord = (gx: number, gy: number) => ({
@@ -583,7 +693,7 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
   };
 
   // Handle Snake Click / Tap
-  const handleSnakeTap = (arrow: ArrowItem, e?: React.PointerEvent) => {
+  const handleSnakeTap = (arrow: ArrowItem, e?: React.SyntheticEvent) => {
     if (e) {
       e.stopPropagation();
     }
@@ -1032,6 +1142,17 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
       {/* Outer Board Frame */}
       <div
         ref={containerRef}
+        onPointerDownCapture={handleBoardPointerDown}
+        onPointerMoveCapture={handleBoardPointerMove}
+        onPointerUpCapture={handleBoardPointerUp}
+        onPointerCancelCapture={handleBoardPointerUp}
+        onClickCapture={event => {
+          if (suppressClickRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            suppressClickRef.current = false;
+          }
+        }}
         className={`relative w-full h-full rounded-3xl p-2 border-2 ${activeBoard.boardBg} ${activeBoard.borderColor} transition-all duration-500 ${isAnimalEscaping ? 'overflow-visible' : 'overflow-hidden'} select-none touch-none shadow-2xl flex items-center justify-center`}
         style={{
           boxShadow:
@@ -1044,13 +1165,21 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none z-30"
+          style={{
+            transform: `translate(${boardView.x}px, ${boardView.y}px) scale(${boardView.scale})`,
+            transformOrigin: 'center',
+          }}
         />
 
         {/* Vector SVG Board for Snake Maze */}
         <svg
           viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
           className="w-full h-full relative z-10 select-none overflow-visible"
-          style={{ touchAction: 'manipulation' }}
+          style={{
+            touchAction: 'none',
+            transform: `translate(${boardView.x}px, ${boardView.y}px) scale(${boardView.scale})`,
+            transformOrigin: 'center',
+          }}
         >
           <defs>
             {/* Subtle Glow Filter for Snakes */}
@@ -1270,7 +1399,7 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
                   <g
                     key={emArrow.id}
                     transform={`translate(${headCoord.x}, ${headCoord.y})`}
-                    onPointerDown={e => handleSnakeTap(emArrow, e)}
+                    onClick={e => handleSnakeTap(emArrow, e)}
                     className={`cursor-pointer select-none ${
                       isBlocked ? 'animate-shake' : ''
                     }`}
@@ -1448,7 +1577,7 @@ export const GameBoardInner: React.FC<GameBoardProps> = ({
             return (
               <g
                 key={arrow.id}
-                    onPointerDown={e => handleSnakeTap(arrow, e)}
+                    onClick={e => handleSnakeTap(arrow, e)}
                 className={`cursor-pointer transition-opacity duration-150 ${
                   isBlocked ? 'animate-shake' : ''
                 }`}
