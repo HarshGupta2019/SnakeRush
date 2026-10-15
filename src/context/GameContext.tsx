@@ -149,22 +149,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     soundManager.setHapticsEnabled(progress.hapticsEnabled);
   }, [progress.soundEnabled, progress.musicEnabled, progress.hapticsEnabled]);
 
-  // Check daily streak reset
+  // Check daily streak reset — runs on mount and whenever the app comes to foreground
   useEffect(() => {
-    const today = getDateKey();
-    if (progress.lastDailyDate && progress.lastDailyDate !== today) {
-      const diffDays = Math.round(
-        (Date.parse(`${today}T00:00:00`) - Date.parse(`${progress.lastDailyDate}T00:00:00`)) /
-          (1000 * 60 * 60 * 24),
-      );
+    const checkStreakReset = () => {
+      const today = getDateKey();
+      setProgress(prev => {
+        if (!prev.lastDailyDate || prev.lastDailyDate === today) return prev;
+        const diffDays = Math.round(
+          (Date.parse(`${today}T00:00:00`) - Date.parse(`${prev.lastDailyDate}T00:00:00`)) /
+            (1000 * 60 * 60 * 24),
+        );
+        if (diffDays === 1) {
+          return { ...prev, dailyCompletedToday: false };
+        } else if (diffDays > 1) {
+          // Streak is broken — reset to 0 so it restarts from 1 on next daily completion
+          return { ...prev, dailyStreak: 0, dailyCompletedToday: false };
+        }
+        return prev;
+      });
+    };
 
-      if (diffDays === 1) {
-        setProgress(prev => ({ ...prev, dailyCompletedToday: false }));
-      } else if (diffDays > 1) {
-        setProgress(prev => ({ ...prev, dailyStreak: 0, dailyCompletedToday: false }));
+    checkStreakReset();
+
+    // Also re-check when user returns to the app (e.g., after background on mobile)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkStreakReset();
       }
-    }
-  }, [progress.lastDailyDate]);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -492,12 +510,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const toggleTheme = useCallback(() => {
     if (isLight) {
       equipBoard('classic');
-      equipArrow('classic');
     } else {
       equipBoard('eye_comfort');
-      equipArrow('eye_comfort_arrow');
     }
-  }, [equipBoard, equipArrow, isLight]);
+  }, [equipBoard, isLight]);
 
   const contextValue = useMemo<GameContextType>(() => ({
         progress,

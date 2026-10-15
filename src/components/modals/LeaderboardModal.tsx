@@ -82,13 +82,16 @@ export const LeaderboardModal: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  const displayedLeaders = leaders
+  const sortedLeaders = leaders
     .filter(entry => tab === 'global' || (isWeekend && entry.weekendKey === getWeekendKey(new Date())))
     .sort((a, b) => tab === 'global' ? b.score - a.score : b.weekendScore - a.weekendScore)
-    .slice(0, tab === 'global' ? 30 : 20)
     .map((entry, index) => ({ ...entry, rank: index + 1, score: tab === 'global' ? entry.score : entry.weekendScore }));
 
-  const userEntry = displayedLeaders.find(entry => entry.isUser);
+  const displayedLeaders = sortedLeaders.slice(0, tab === 'global' ? 50 : 20);
+
+  // Full-list user entry so rank is correct even if user is outside top 50
+  const userEntry = sortedLeaders.find(entry => entry.isUser);
+  const userInDisplayedList = displayedLeaders.some(entry => entry.isUser);
 
   return (
     <div className="flex-1 w-full max-w-lg mx-auto flex flex-col justify-between px-4 pt-3 pb-24 overflow-y-auto select-none">
@@ -162,8 +165,8 @@ export const LeaderboardModal: React.FC = () => {
         </button>
       </div>
 
-      {/* User Standing Card */}
-      {userEntry && (
+      {/* User Standing Card — always visible if user exists in global list */}
+      {userEntry && tab === 'global' && (
         <div
           className={`my-2 p-3.5 rounded-3xl border-2 shadow-xl flex items-center justify-between transition-colors ${
             isLight
@@ -188,7 +191,45 @@ export const LeaderboardModal: React.FC = () => {
                 )}
               </div>
               <div className={`mt-0.5 text-[10px] ${isLight ? 'text-stone-600' : 'text-slate-400'}`}>
-                Your real Firebase score
+                {userInDisplayedList ? 'Your ranking' : 'Your ranking · outside top 50'}
+              </div>
+            </div>
+          </div>
+
+          <div className={`flex items-center gap-1 font-mono font-bold text-sm ${isLight ? 'text-amber-800' : 'text-amber-400'}`}>
+            <Star className="w-4 h-4 fill-current" />
+            <span>{userEntry.score}</span>
+          </div>
+        </div>
+      )}
+
+      {/* User Standing Card for Weekly tab */}
+      {userEntry && tab === 'weekly' && displayedLeaders.some(e => e.isUser) && (
+        <div
+          className={`my-2 p-3.5 rounded-3xl border-2 shadow-xl flex items-center justify-between transition-colors ${
+            isLight
+              ? 'bg-indigo-50/90 border-indigo-300 text-stone-900'
+              : 'bg-gradient-to-r from-indigo-950/80 via-slate-900 to-indigo-950/80 border-indigo-500/50 text-white'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center font-black text-sm text-white shadow-md">
+              #{userEntry.rank}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base">{userEntry.avatar}</span>
+                <span className={`text-sm font-black ${isLight ? 'text-indigo-950' : 'text-white'}`}>
+                  {userEntry.name} (You)
+                </span>
+                {userEntry.dailyStreak > 1 && (
+                  <span className={`text-[10px] px-1.5 rounded-full flex items-center gap-0.5 ${isLight ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/20 text-amber-500'}`}>
+                    <Flame className="w-3 h-3" /> {userEntry.dailyStreak}
+                  </span>
+                )}
+              </div>
+              <div className={`mt-0.5 text-[10px] ${isLight ? 'text-stone-600' : 'text-slate-400'}`}>
+                Your ranking
               </div>
             </div>
           </div>

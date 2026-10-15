@@ -32,7 +32,6 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
     startLevel,
     onLevelCompleted,
     equipBoard,
-    equipArrow,
   } = useGame();
 
   // Load level configuration
@@ -311,10 +310,8 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
   const handleToggleTheme = () => {
     if (progress.selectedBoard === 'eye_comfort') {
       equipBoard('classic');
-      equipArrow('classic');
     } else {
       equipBoard('eye_comfort');
-      equipArrow('eye_comfort_arrow');
     }
   };
 
