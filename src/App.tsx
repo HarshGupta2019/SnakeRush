@@ -28,24 +28,13 @@ class GlobalErrorBoundary extends Component<{ children: React.ReactNode }, { has
   }
 }
 
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { signInAnonymously } from "firebase/auth";
-import { auth } from "./firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, getDb } from "./firebase";
 import { GameProvider, useGame } from './context/GameContext';
 import { HeaderBar } from './components/common/HeaderBar';
 import { MobileFooter } from './components/common/MobileFooter';
 import { HomeScreen } from './components/screens/HomeScreen';
-import { ModeSelectModal } from './components/screens/ModeSelectModal';
-import { LevelSelectScreen } from './components/screens/LevelSelectScreen';
-import { GameScreen } from './components/screens/GameScreen';
-import { ShopModal } from './components/modals/ShopModal';
-import { DailyChallengeModal } from './components/modals/DailyChallengeModal';
-import { AchievementsModal } from './components/modals/AchievementsModal';
-import { LeaderboardModal } from './components/modals/LeaderboardModal';
-import { ProfileModal } from './components/modals/ProfileModal';
-import { SettingsModal } from './components/modals/SettingsModal';
 import { SplashScreen } from './components/common/SplashScreen';
 import { BOARD_THEMES } from './utils/themes';
 import { initializeAdMob } from './utils/admob';
@@ -57,6 +46,34 @@ import {
   scheduleInactivityReminders,
 } from './utils/inactivityReminders';
 
+const ModeSelectModal = lazy(() =>
+  import('./components/screens/ModeSelectModal').then(module => ({ default: module.ModeSelectModal })),
+);
+const LevelSelectScreen = lazy(() =>
+  import('./components/screens/LevelSelectScreen').then(module => ({ default: module.LevelSelectScreen })),
+);
+const GameScreen = lazy(() =>
+  import('./components/screens/GameScreen').then(module => ({ default: module.GameScreen })),
+);
+const ShopModal = lazy(() =>
+  import('./components/modals/ShopModal').then(module => ({ default: module.ShopModal })),
+);
+const DailyChallengeModal = lazy(() =>
+  import('./components/modals/DailyChallengeModal').then(module => ({ default: module.DailyChallengeModal })),
+);
+const AchievementsModal = lazy(() =>
+  import('./components/modals/AchievementsModal').then(module => ({ default: module.AchievementsModal })),
+);
+const LeaderboardModal = lazy(() =>
+  import('./components/modals/LeaderboardModal').then(module => ({ default: module.LeaderboardModal })),
+);
+const ProfileModal = lazy(() =>
+  import('./components/modals/ProfileModal').then(module => ({ default: module.ProfileModal })),
+);
+const SettingsModal = lazy(() =>
+  import('./components/modals/SettingsModal').then(module => ({ default: module.SettingsModal })),
+);
+
 
 export const saveScore = async (stars: number, playerName: string, avatar: string, dailyStreak: number, lastDailyDate: string) => {
   const user = auth.currentUser;
@@ -64,8 +81,12 @@ export const saveScore = async (stars: number, playerName: string, avatar: strin
   if (!user) return;
 
   try {
-    const playerRef = doc(db, 'leaderboard', user.uid);
-    const playerSnap = await getDoc(playerRef);
+    const [firestore, db] = await Promise.all([
+      import('firebase/firestore'),
+      getDb(),
+    ]);
+    const playerRef = firestore.doc(db, 'leaderboard', user.uid);
+    const playerSnap = await firestore.getDoc(playerRef);
 
     const currentData = playerSnap.exists() ? playerSnap.data() : {};
     const currentStars = Number(currentData.stars) || 0;
@@ -92,7 +113,7 @@ export const saveScore = async (stars: number, playerName: string, avatar: strin
       currentData.lastDailyDate !== lastDailyDate ||
       (isWeekend && (!sameWeekend || Number(currentData.weekendStars) !== nextWeekendStars))
     ) {
-      await setDoc(
+      await firestore.setDoc(
         playerRef,
         {
           playerId: user.uid,
@@ -299,7 +320,21 @@ const MainAppContent: React.FC = () => {
 
       {/* Primary Screen Area */}
       <main className="flex-1 flex flex-col min-h-0 overflow-y-auto relative">
-        {renderActiveScreen()}
+        <Suspense
+          fallback={
+            <div
+              className={`flex flex-1 items-center justify-center text-sm font-bold ${
+                isLight ? 'text-stone-600' : 'text-slate-300'
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              Loading…
+            </div>
+          }
+        >
+          {renderActiveScreen()}
+        </Suspense>
       </main>
 
       {/* Bottom Mobile Tab Bar */}

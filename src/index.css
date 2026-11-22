@@ -164,6 +164,39 @@
   animation: fade-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.performance-lite .blur-3xl {
+  filter: none !important;
+}
+
+.performance-lite .backdrop-blur-md,
+.performance-lite .backdrop-blur-lg {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.performance-lite .animate-ping,
+.performance-lite .animate-pulse,
+.performance-lite .animate-spin,
+.performance-lite .animate-bounce,
+.performance-lite .animate-emergency,
+.performance-lite .animate-float {
+  animation: none !important;
+}
+
+.performance-lite .animate-siren {
+  animation: none !important;
+  box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.35);
+}
+
+.performance-lite [class*="drop-shadow"] {
+  filter: none !important;
+}
+
+.performance-lite .shadow-2xl,
+.performance-lite .shadow-xl {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+}
+
 
 ::-webkit-scrollbar {
   width: 5px;

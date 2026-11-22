@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ArrowLeft, Trophy, Star, Crown, Flame } from 'lucide-react';
 import { soundManager } from '../../utils/audio';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { auth, getDb } from '../../firebase';
 
 interface LeaderboardUser {
   rank: number;
@@ -33,53 +32,75 @@ export const LeaderboardModal: React.FC = () => {
   };
 
   useEffect(() => {
-    const leaderboardQuery = query(collection(db, 'leaderboard'), orderBy('stars', 'desc'));
-    const unsubscribe = onSnapshot(
-      leaderboardQuery,
-      snapshot => {
-        const entries = snapshot.docs
-          .map((entry, index) => {
-            const data = entry.data();
-            const score = typeof data.stars === 'number' ? data.stars : Number(data.stars);
-            const weekendScore = typeof data.weekendStars === 'number' ? data.weekendStars : Number(data.weekendStars);
-            const playerId = typeof data.playerId === 'string' ? data.playerId : entry.id;
-            const playerName = typeof data.playerName === 'string' && data.playerName.trim()
-              ? data.playerName.trim()
-              : 'Player';
-            const playerAvatar = typeof data.playerAvatar === 'string' && data.playerAvatar.trim()
-              ? data.playerAvatar.trim()
-              : '⚡';
-            const dailyStreak = typeof data.dailyStreak === 'number' ? data.dailyStreak : 1;
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
 
-            if (!playerId || !Number.isFinite(score)) return null;
+    void (async () => {
+      const [firestore, db] = await Promise.all([
+        import('firebase/firestore'),
+        getDb(),
+      ]);
+      if (!active) return;
 
-            return {
-              rank: index + 1,
-              name: playerName,
-              avatar: playerAvatar,
-              dailyStreak,
-              score,
-              weekendScore: Number.isFinite(weekendScore) ? weekendScore : 0,
-              weekendKey: typeof data.weekendKey === 'string' ? data.weekendKey : null,
-              playerId,
-              updatedAt: data.updatedAt?.toDate?.() || null,
-              isUser: playerId === auth.currentUser?.uid,
-            };
-          })
-          .filter((entry): entry is LeaderboardUser => entry !== null);
+      const leaderboardQuery = firestore.query(
+        firestore.collection(db, 'leaderboard'),
+        firestore.orderBy('stars', 'desc'),
+      );
+      unsubscribe = firestore.onSnapshot(
+        leaderboardQuery,
+        snapshot => {
+          const entries = snapshot.docs
+            .map((entry, index) => {
+              const data = entry.data();
+              const score = typeof data.stars === 'number' ? data.stars : Number(data.stars);
+              const weekendScore = typeof data.weekendStars === 'number' ? data.weekendStars : Number(data.weekendStars);
+              const playerId = typeof data.playerId === 'string' ? data.playerId : entry.id;
+              const playerName = typeof data.playerName === 'string' && data.playerName.trim()
+                ? data.playerName.trim()
+                : 'Player';
+              const playerAvatar = typeof data.playerAvatar === 'string' && data.playerAvatar.trim()
+                ? data.playerAvatar.trim()
+                : '⚡';
+              const dailyStreak = typeof data.dailyStreak === 'number' ? data.dailyStreak : 1;
 
-        setLeaders(entries);
-        setIsLoading(false);
-        setLoadError(false);
-      },
-      error => {
-        console.error('Leaderboard load error:', error);
-        setLoadError(true);
-        setIsLoading(false);
-      },
-    );
+              if (!playerId || !Number.isFinite(score)) return null;
 
-    return unsubscribe;
+              return {
+                rank: index + 1,
+                name: playerName,
+                avatar: playerAvatar,
+                dailyStreak,
+                score,
+                weekendScore: Number.isFinite(weekendScore) ? weekendScore : 0,
+                weekendKey: typeof data.weekendKey === 'string' ? data.weekendKey : null,
+                playerId,
+                updatedAt: data.updatedAt?.toDate?.() || null,
+                isUser: playerId === auth.currentUser?.uid,
+              };
+            })
+            .filter((entry): entry is LeaderboardUser => entry !== null);
+
+          setLeaders(entries);
+          setIsLoading(false);
+          setLoadError(false);
+        },
+        error => {
+          console.error('Leaderboard load error:', error);
+          setLoadError(true);
+          setIsLoading(false);
+        },
+      );
+    })().catch(error => {
+      if (!active) return;
+      console.error('Leaderboard load error:', error);
+      setLoadError(true);
+      setIsLoading(false);
+    });
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const sortedLeaders = leaders
