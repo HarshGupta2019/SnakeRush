@@ -3,8 +3,7 @@ import { GameMode, ScreenType, UserProgress, UserStats } from '../types';
 import { ACHIEVEMENTS } from '../data/achievements';
 import { soundManager } from '../utils/audio';
 import { BOARD_THEMES, ARROW_SKINS } from '../utils/themes';
-import { auth, db } from '../firebase';
-import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, getDb } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { getDateKey } from '../utils/dailyChallenge';
 
@@ -187,7 +186,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
       if (!user) return;
-      void getDocs(collection(db, 'users', user.uid, 'snakeUnlocks')).then(snapshot => {
+      void (async () => {
+        const [firestore, db] = await Promise.all([
+          import('firebase/firestore'),
+          getDb(),
+        ]);
+        const snapshot = await firestore.getDocs(
+          firestore.collection(db, 'users', user.uid, 'snakeUnlocks'),
+        );
         const cloudEntries = snapshot.docs.map(snakeDoc => ({
           id: snakeDoc.id,
           watched: Number(snakeDoc.data().adsWatched) || 0,
@@ -204,7 +210,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           snakeAdProgress: { ...(prev.snakeAdProgress || {}), ...cloudProgress },
           unlockedArrows: [...new Set([...prev.unlockedArrows, ...cloudUnlocked])],
         }));
-      }).catch(error => console.error('Snake unlock load error:', error));
+      })().catch(error => console.error('Snake unlock load error:', error));
     });
 
     return unsubscribe;
@@ -345,17 +351,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     void getAuthenticatedUser()
-      .then(user => {
+      .then(async user => {
         if (!user) return;
-        return setDoc(
-          doc(db, 'users', user.uid, 'snakeUnlocks', id),
+        const [firestore, db] = await Promise.all([
+          import('firebase/firestore'),
+          getDb(),
+        ]);
+        return firestore.setDoc(
+          firestore.doc(db, 'users', user.uid, 'snakeUnlocks', id),
           {
             playerId: user.uid,
             snakeId: id,
             adsWatched: nextWatched,
             adsRequired: SNAKE_ADS_REQUIRED,
             unlocked: isNowUnlocked,
-            updatedAt: serverTimestamp(),
+            updatedAt: firestore.serverTimestamp(),
           },
           { merge: true },
         );

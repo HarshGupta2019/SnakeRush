@@ -3,8 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { ArrowLeft, User, Star, Trophy, Flame, Zap, Shield, Edit2, Check, HelpCircle, Info, SlidersHorizontal } from 'lucide-react';
 import { soundManager } from '../../utils/audio';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from '../../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, getDb } from '../../firebase';
 
 const AVATAR_OPTIONS = ['⚡', '🏹', '🦅', '👑', '🚀', '💎', '🐉', '🐱', '🐺', '🔥', '🔮', '🤖'];
 
@@ -41,12 +40,16 @@ export const ProfileModal: React.FC = () => {
     const user = auth.currentUser;
     if (user) {
       try {
-        const playerRef = doc(db, 'leaderboard', user.uid);
-        const playerSnap = await getDoc(playerRef);
+        const [firestore, db] = await Promise.all([
+          import('firebase/firestore'),
+          getDb(),
+        ]);
+        const playerRef = firestore.doc(db, 'leaderboard', user.uid);
+        const playerSnap = await firestore.getDoc(playerRef);
         if (playerSnap.exists()) {
-          await setDoc(playerRef, { playerName, playerAvatar: selectedAvatar }, { merge: true });
+          await firestore.setDoc(playerRef, { playerName, playerAvatar: selectedAvatar }, { merge: true });
         } else {
-          await setDoc(playerRef, {
+          await firestore.setDoc(playerRef, {
             playerId: user.uid,
             playerName,
             playerAvatar: selectedAvatar,

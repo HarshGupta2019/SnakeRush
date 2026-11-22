@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ArrowLeft, Settings, Volume2, VolumeX, Music, Star, HelpCircle, Shield, Info } from 'lucide-react';
 import { soundManager } from '../../utils/audio';
-import { auth, db } from '../../firebase';
+import { auth, getDb } from '../../firebase';
 import { signInAnonymously } from 'firebase/auth';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 export const SettingsModal: React.FC = () => {
   const {
@@ -35,12 +34,16 @@ export const SettingsModal: React.FC = () => {
     setIsFeedbackSaving(true);
     try {
       const user = auth.currentUser || (await signInAnonymously(auth)).user;
-      await addDoc(collection(db, 'feedback'), {
+      const [firestore, db] = await Promise.all([
+        import('firebase/firestore'),
+        getDb(),
+      ]);
+      await firestore.addDoc(firestore.collection(db, 'feedback'), {
         playerId: user.uid,
         playerName: progress.playerName,
         rating: feedbackRating,
         comment: feedbackComment.trim(),
-        createdAt: serverTimestamp(),
+        createdAt: firestore.serverTimestamp(),
       });
       setFeedbackRating(0);
       setFeedbackComment('');
